@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+
+torchvision>=0.17
+optuna>=3.0
+matplotlib>=3.8
+pandas>=2.2
+seaborn>=0.13
+numpy>=1.24
+scikit-learn>=1.2
+
+# Para rodar notebooks 
+ipykernel>=6.15
+
