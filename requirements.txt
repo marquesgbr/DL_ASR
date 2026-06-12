@@ -8,6 +8,10 @@ pandas>=2.2
 seaborn>=0.13
 numpy>=1.24
 scikit-learn>=1.2
+librosa>=0.10
+soundfile>=0.12
+transformers>=4.45
+sentencepiece>=0.2
 
 # Para rodar notebooks 
 ipykernel>=6.15
