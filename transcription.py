@@ -225,6 +225,7 @@ def save_transcription_json(result: TranscriptionResult, output_path: str | Path
         "language": result.language,
         "start_sec": parse_seconds(result.start_sec),
         "end_sec": parse_seconds(result.end_sec),
+        "processing_time_sec": result.processing_time,
         "text": result.text,
         "segments": result.segments,
     }
