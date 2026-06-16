@@ -193,6 +193,8 @@ def train_sequence_model(
     model: LSTMClassifier,
     X_train: np.ndarray,
     y_train: np.ndarray,
+    X_val: np.ndarray,
+    y_val: np.ndarray,
     epochs: int = 100,
     batch_size: int = 64,
     lr: float = 1e-3,
@@ -208,11 +210,13 @@ def train_sequence_model(
     Parameters
     ----------
     model         : instância de LSTMClassifier
-    X_train       : shape (n, seq_len, n_features)    epochs        : número máximo de épocas
+    X_train/X_val : shape (n, seq_len, n_features)    
+    y_train/y_val : shape (n,)
+    epochs        : número máximo de épocas
     batch_size    : tamanho do mini-batch
     lr            : learning rate do Adam
-    patience      : épocas sem melhora na train_loss antes de parar
-    min_delta     : redução mínima na train_loss para resetar patience
+    patience      : épocas sem melhora na val_loss antes de parar
+    min_delta     : redução mínima na val_loss para resetar patience
     class_weights : tensor de pesos por classe (shape (2,)) ou None
 
     Returns
@@ -220,8 +224,8 @@ def train_sequence_model(
     dict com chaves:
 
       model      : modelo com melhores pesos carregados
-      history    : {train_loss: [...]}
-      best_train_loss : menor train_loss atingida
+      history    : {train_loss: [...], val_loss: [...]}
+      best_val_loss : menor val_loss atingida
       epochs_run : épocas efetivamente rodadas
     """
     device = device or _get_device()
@@ -248,9 +252,10 @@ def train_sequence_model(
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     train_loader = _make_loader(X_train, y_train, batch_size, shuffle=True)
+    val_loader = _make_loader(X_val, y_val, batch_size, shuffle=False)
 
-    history: dict = {"train_loss": []}
-    best_train_loss = np.inf
+    history: dict = {"train_loss": [], "val_loss": []}
+    best_val_loss = np.inf
     best_state = None
     patience_counter = 0
 
@@ -272,16 +277,30 @@ def train_sequence_model(
         train_loss = running_loss / len(X_train)
         history["train_loss"].append(train_loss)
 
+        # --- validação ---
+        model.eval()
+        val_running_loss = 0.0
+        with torch.no_grad():
+            for batch_X, batch_y in val_loader:
+                batch_X, batch_y = batch_X.to(device), batch_y.to(device)
+                logits = model(batch_X)
+                if resolved_loss == "bce_with_logits":
+                    batch_loss = loss_fn(logits.squeeze(-1), batch_y.float())
+                else:
+                    batch_loss = loss_fn(logits, batch_y)
+                val_running_loss += batch_loss.item() * len(batch_y)
+        val_loss = val_running_loss / len(X_val)
+        history["val_loss"].append(val_loss)
 
-        # --- early stopping por train_loss ---
-        if train_loss < best_train_loss - min_delta:
-            best_train_loss = train_loss
+        # --- early stopping por val_loss ---
+        if val_loss < best_val_loss - min_delta:
+            best_val_loss = val_loss
             best_state = deepcopy(model.state_dict())
             patience_counter = 0
         else:
             patience_counter += 1
             if patience_counter >= patience:
-                print(f"Early stopping na época {epoch + 1}  (best train_loss={best_train_loss:.6f})")
+                print(f"Early stopping na época {epoch + 1}  (best val_loss={best_val_loss:.6f})")
                 break
 
     if best_state is not None:
@@ -290,7 +309,7 @@ def train_sequence_model(
     return {
         "model":         model,
         "history":       history,
-        "best_train_loss": best_train_loss,
+        "best_val_loss": best_val_loss,
         "epochs_run":    epoch + 1,
     }
 
